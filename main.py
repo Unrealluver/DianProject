@@ -4,8 +4,12 @@ import math
 import operator
 import os
 import copy
+import NeuralNetwork
 import numpy as np
+import GetOutput
 from sklearn.feature_extraction.text import TfidfVectorizer
+
+baseTrainFilePath = '/media/patrick/Softwares/PyProject/DianProject/source/20newsbydate/20news-bydate-train/'
 
 excludes = ['very', 'ourselves', 'am', 'doesn', 'through', 'me', 'against', 'up', 'just', 'her', 'ours',
             'couldn', 'because', 'is', 'isn', 'it', 'only', 'in', 'such', 'too', 'mustn', 'under', 'their',
@@ -42,6 +46,10 @@ categories = ['alt.atheism',
               'talk.religion.misc']
 
 saved_word_tf_idf = {}
+
+saved_all_words = {}
+
+saved_word_idf = {}
 
 def list2string(words_list):
     string_list = []
@@ -139,6 +147,8 @@ def feature_select(library):
         all_words.update(doc_frequency[category])
     print("all_words has been gotten, its len is: " + str(len(all_words)))
 
+    np.save('./data/all_words.npy', all_words)
+
     # essay_list转set
     essay_set_lists = []
     for category in library:
@@ -163,7 +173,7 @@ def feature_select(library):
             word_idf[word] = math.log(doc_num / (word_doc[word] + 1))
     print("word_idf has been gotten!")
 
-    # 计算每个词的TF*IDF的值
+    # 计算每个词的TF * IDF的值
     word_tf_idf = {}
     for category in doc_frequency:
         word_tf_idf_category = {}
@@ -176,18 +186,66 @@ def feature_select(library):
     # np.save('./data/word_tf_idf.npy', word_tf_idf)
     f = open('./data/word_tf_idf.txt', 'w')
     f.write(str(word_tf_idf))
+    f = open('./data/word_idf.txt', 'w')
+    f.write(str(word_idf))
+    f = open('./data/all_words.txt', 'w')
+    f.write(str(all_words))
     f.close()
     # 对字典按值由大到小排序
     # dict_feature_select = sorted(word_tf_idf.items(), key=operator.itemgetter(1), reverse=True)
     return word_tf_idf
 
+def preprocess_features():
+    library = load_data_set(baseTrainFilePath, categories)  # 加载数据
+    features = feature_select(library)  # 所有词的TF-IDF值
+    print(features)
+    print(len(features))
+
+def load_processed_data():
+    f = open('./data/word_tf_idf.txt', 'r')
+    temp = f.read()
+    saved_word_tf_idf = eval(temp)
+    f = open('./data/word_idf.txt', 'r')
+    temp = f.read()
+    saved_word_idf = eval(temp)
+    f = open('./data/all_words.txt', 'r')
+    temp = f.read()
+    saved_all_words = eval(temp)
+    f.close()
+    return saved_word_tf_idf, saved_word_idf, saved_all_words
+
+def get_essay_tf(essay, word_idf):
+    essay_word_frequency = defaultdict(int)
+    essay_tf = {}
+    essay_vec = []
+    total_words_num = len(essay)
+    for word in essay:
+        essay_word_frequency[word] = essay_word_frequency + 1
+    for word in essay_word_frequency:
+        if word in excludes:
+            essay_word_frequency.pop(word)
+    for word in essay_word_frequency:
+        essay_tf[word] = essay_word_frequency[word] / total_words_num
+    for word in word_idf:
+        if word in essay_tf:
+            essay_vec.append(essay_tf[word] * word_idf[word])
+        else:
+            essay_vec.append(0)
+    return essay_vec
 
 if __name__ == '__main__':
-    # baseFilePath = '/media/patrick/Softwares/PyProject/DianProject/source/20newsbydate/20news-bydate-train/'
-    # library = load_data_set(baseFilePath, categories)  # 加载数据
-    # features = feature_select(library)  # 所有词的TF-IDF值
-    # print(features)
-    # print(len(features))
+    hidden_layer_num = 5000
+    layer_weight = [0.3 for _ in range(len(saved_all_words) * hidden_layer_num)]
+    bias = [0.3 for _ in range(hidden_layer_num * len(categories))]
+    saved_word_tf_idf, saved_word_idf, saved_all_words = load_processed_data()
+    nn = NeuralNetwork.NeuralNetwork(len(saved_all_words), hidden_layer_num, len(categories), layer_weight, bias,
+                                     layer_weight, bias)
+    output_vec = GetOutput.get_output()
+    library = load_data_set(baseTrainFilePath, categories)
+    # tesget_essay_tf(library['sci.med'][1])
+    for category in library:
+        for essay_index in range(len(library[category]) * 0.7):
+            nn.train(get_essay_tf(library[category][essay_index]), saved_word_idf, output_vec[category])
 
     # tf_example
     # tfidf2 = TfidfVectorizer()
@@ -195,10 +253,7 @@ if __name__ == '__main__':
     # re = tfidf2.fit_transform(list2string(wordsList))
 
 
-    f = open('./data/word_tf_idf.txt', 'r')
-    temp  =f.read()
-    saved_word_tf_idf = eval(temp)
-    f.close()
 
     # saved_word_tf_idf = np.load('./data/word_tf_idf.npy')
     print("word_tf_idf has been read! type of word_tf_idf is " + str(type(saved_word_tf_idf)))
+
