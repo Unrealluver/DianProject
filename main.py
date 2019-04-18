@@ -3,13 +3,22 @@ from collections import defaultdict
 import math
 import operator
 import os
+import copy
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-excludes = ['the', 'and', 'to', 'of', 'i', 'a', 'in', 'it', 'that', 'is',
-            'you', 'my', 'with', 'not', 'his', 'this', 'but', 'for',
-            'me', 's', 'he', 'be', 'as', 'so', 'him', 'your',
-            'from', 'on', 'are', 'or', 'have', 'if', 'an']
+excludes = ['very', 'ourselves', 'am', 'doesn', 'through', 'me', 'against', 'up', 'just', 'her', 'ours',
+            'couldn', 'because', 'is', 'isn', 'it', 'only', 'in', 'such', 'too', 'mustn', 'under', 'their',
+            'if', 'to', 'my', 'himself', 'after', 'why', 'while', 'can', 'each', 'itself', 'his', 'all', 'once',
+            'herself', 'more', 'our', 'they', 'hasn', 'on', 'ma', 'them', 'its', 'where', 'did', 'll', 'you',
+            'didn', 'nor', 'as', 'now', 'before', 'those', 'yours', 'from', 'who', 'was', 'm', 'been', 'will',
+            'into', 'same', 'how', 'some', 'of', 'out', 'with', 's', 'being', 't', 'mightn', 'she', 'again', 'be',
+            'by', 'shan', 'have', 'yourselves', 'needn', 'and', 'are', 'o', 'these', 'further', 'most', 'yourself',
+            'having', 'aren', 'here', 'he', 'were', 'but', 'this', 'myself', 'own', 'we', 'so', 'i', 'does', 'both',
+            'when', 'between', 'd', 'had', 'the', 'y', 'has', 'down', 'off', 'than', 'haven', 'whom', 'wouldn',
+            'should', 've', 'over', 'themselves', 'few', 'then', 'hadn', 'what', 'until', 'won', 'no', 'about',
+            'any', 'that', 'for', 'shouldn', 'don', 'do', 'there', 'doing', 'an', 'or', 'ain', 'hers', 'wasn',
+            'weren', 'above', 'a', 'at', 'your', 'theirs', 'below', 'other', 'not', 're', 'him', 'during', 'which']
 
 categories = ['alt.atheism',
               'rec.sport.hockey',
@@ -32,6 +41,7 @@ categories = ['alt.atheism',
               'rec.sport.baseball',
               'talk.religion.misc']
 
+saved_word_tf_idf = {}
 
 def list2string(words_list):
     string_list = []
@@ -96,13 +106,13 @@ def feature_select(library):
                 doc_frequency_category[word] += 1
         doc_frequency[category] = doc_frequency_category
     print("doc_frequency has been gotten!")
-    # todo: 手动去常见词
-    # doc_frequency_bak = doc_frequency.copy()
-    # for doc_frequency_category in doc_frequency:
-    #
-    #     for key in doc_frequency_bak.keys():
-    #         if key in excludes:
-    #             doc_frequency.pop(key)
+
+    # 手动去停用词
+    doc_frequency_bak = copy.deepcopy(doc_frequency)
+    for category in library:
+        for key in doc_frequency_bak.get(category).keys():
+            if key in excludes:
+                doc_frequency[category].pop(key)
 
     # 计算每个词的TF值
     # word_tf{dict:category} contains word_tf_category{dict:word} contains num _int
@@ -129,14 +139,23 @@ def feature_select(library):
         all_words.update(doc_frequency[category])
     print("all_words has been gotten, its len is: " + str(len(all_words)))
 
+    # essay_list转set
+    essay_set_lists = []
+    for category in library:
+        for essay in library[category]:
+            essay_set_lists.append(set(essay))
+    flag = 0
     # warning : its too slow!!!!!!!
     for word in all_words:
-        for category in library:
-            for essay in library[category]:
-                if word in essay:
-                    word_doc[word] += 1
-                    break
-        print("word: " + word + " has been gotten. " + " num: " + str(word_doc[word]))
+        for essay in essay_set_lists:
+            if word in essay:
+                word_doc[word] += 1
+                continue
+        flag = flag + 1
+        if flag % 1000 == 0:
+            print(str(flag) + " words has been solved.")
+            # print("essay has been done, word_doc: " + str(word_doc[word]))
+        # print("word: " + word + " has been gotten. " + " num: " + str(word_doc[word]))
 
 
     for category in doc_frequency:
@@ -153,17 +172,33 @@ def feature_select(library):
         word_tf_idf_category = sorted(word_tf_idf_category.items(), key=operator.itemgetter(1), reverse=True)
         word_tf_idf[category] = word_tf_idf_category
     print("word_tf_idf has been gotten!")
+
+    # np.save('./data/word_tf_idf.npy', word_tf_idf)
+    f = open('./data/word_tf_idf.txt', 'w')
+    f.write(str(word_tf_idf))
+    f.close()
     # 对字典按值由大到小排序
     # dict_feature_select = sorted(word_tf_idf.items(), key=operator.itemgetter(1), reverse=True)
     return word_tf_idf
 
 
 if __name__ == '__main__':
-    baseFilePath = '/media/patrick/Softwares/PyProject/DianProject/source/20newsbydate/20news-bydate-train/'
-    library = load_data_set(baseFilePath, categories)  # 加载数据
-    features = feature_select(library)  # 所有词的TF-IDF值
-    print(features)
-    print(len(features))
+    # baseFilePath = '/media/patrick/Softwares/PyProject/DianProject/source/20newsbydate/20news-bydate-train/'
+    # library = load_data_set(baseFilePath, categories)  # 加载数据
+    # features = feature_select(library)  # 所有词的TF-IDF值
+    # print(features)
+    # print(len(features))
+
+    # tf_example
     # tfidf2 = TfidfVectorizer()
     # print(list2string(wordsList))
     # re = tfidf2.fit_transform(list2string(wordsList))
+
+
+    f = open('./data/word_tf_idf.txt', 'r')
+    temp  =f.read()
+    saved_word_tf_idf = eval(temp)
+    f.close()
+
+    # saved_word_tf_idf = np.load('./data/word_tf_idf.npy')
+    print("word_tf_idf has been read! type of word_tf_idf is " + str(type(saved_word_tf_idf)))
