@@ -4,9 +4,10 @@ import math
 import operator
 import os
 import copy
-import NeuralNetwork
+from NeuralNetwork import *
 import numpy as np
 import GetOutput
+import random
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 baseTrainFilePath = '/media/patrick/Softwares/PyProject/DianProject/source/20newsbydate/20news-bydate-train/'
@@ -45,11 +46,36 @@ categories = ['alt.atheism',
               'rec.sport.baseball',
               'talk.religion.misc']
 
+output_sample = {'alt.atheism' : 0,
+              'rec.sport.hockey': 1,
+              'comp.graphics': 2,
+              'sci.crypt': 3,
+              'comp.os.ms-windows.misc': 4,
+              'sci.electronics': 5,
+              'comp.sys.ibm.pc.hardware': 6,
+              'sci.med': 7,
+              'comp.sys.mac.hardware': 8,
+              'sci.space': 9,
+              'comp.windows.x': 10,
+              'soc.religion.christian': 11,
+              'misc.forsale': 12,
+              'talk.politics.guns': 13,
+              'rec.autos': 14,
+              'talk.politics.mideast': 15,
+              'rec.motorcycles': 16,
+              'talk.politics.misc': 17,
+              'rec.sport.baseball': 18,
+              'talk.religion.misc': 19}
+
 saved_word_tf_idf = {}
 
 saved_all_words = {}
 
 saved_word_idf = {}
+
+saved_sample_train = {}
+
+saved_words_needed = {}
 
 def list2string(words_list):
     string_list = []
@@ -61,7 +87,7 @@ def list2string(words_list):
 
 def file_basic_process(txt):
     txt = txt.lower()
-    for ch in "~@#$%^&*()_-+=<>?/,.:;{}[]|\\!\'\"":
+    for ch in "~@#$%^&*()_-+=<`>?/,.:;{}[]|\\!\'\"":
         txt = txt.replace(ch, ' ')
     return txt
 
@@ -81,15 +107,37 @@ def load_data_set(baseFilePath, categories):
         wordsList = []
         for fileName in fileNames:
             # print(filesPath + fileName)
-            txt = open(baseFilePath + category + '/' + fileName, 'r', errors='ignore').read()
+            txt = open(baseFilePath + category + '/' + fileName, 'r', errors='replace').read()
             letterVec = file_basic_process(txt)
             words = letterVec.split()
             # print(words)
             wordsList.append(words)
         library[category] = wordsList
+
     # print(wordslist)
     # classVec = [0, 1, 0, 1, 0, 1]  # 类别标签向量，1代表好，0代表不好
     return library
+
+
+def get_words_needed():
+    word_tf_idf, word_idf, saved_all_words, saved_sample_train = load_processed_data()
+    words_needed = set()
+    for category in categories:
+        category_len = len(word_tf_idf[category])
+        token = [i for i in word_tf_idf[category]][:category_len]
+        list1 = [i for i in list(reversed(token))][:int(0.2 * category_len)]
+        for tUple in list1:
+            words_needed.add(tUple[0])
+        print(category + 'has been done!')
+
+    word_idf_bak = copy.deepcopy(word_idf)
+    for word_index in word_idf_bak:
+        if word_index not in words_needed:
+            word_idf.pop(word_index)
+
+    f = open('./data/words_needed.txt', 'w')
+    f.write(str(word_idf))
+    f.close()
 
 
 """
@@ -120,6 +168,13 @@ def feature_select(library):
     for category in library:
         for key in doc_frequency_bak.get(category).keys():
             if key in excludes:
+                doc_frequency[category].pop(key)
+
+    # 手动去除数字
+    doc_frequency_bak = copy.deepcopy(doc_frequency)
+    for category in library:
+        for key in doc_frequency_bak.get(category).keys():
+            if str.isdigit(key):
                 doc_frequency[category].pop(key)
 
     # 计算每个词的TF值
@@ -179,9 +234,21 @@ def feature_select(library):
         word_tf_idf_category = {}
         for word in doc_frequency[category]:
             word_tf_idf_category[word] = word_tf[category][word] * word_idf[word]
-        word_tf_idf_category = sorted(word_tf_idf_category.items(), key=operator.itemgetter(1), reverse=True)
+        word_tf_idf_category = sorted(word_tf_idf_category.items(), key=operator.itemgetter(1), reverse=False)
         word_tf_idf[category] = word_tf_idf_category
     print("word_tf_idf has been gotten!")
+
+    f = open('./data/word_idf_old.txt', 'w')
+    f.write(str(word_idf))
+
+    get_words_needed()
+    # for category in doc_frequency:
+    #     for index in range(len(word_tf_idf[category])):
+    #         if word_tf_idf[category][index][1] < 0.0001:
+    #             if word_tf_idf[category][index][0] in word_idf:
+    #                 if word_tf_idf[category][index][0] == 'god':
+    #                     print('remove: ' + word_tf_idf[category][index][0] + 'tfidf: ' + str(word_tf_idf[category][index][1]))
+    #                 word_idf.pop(word_tf_idf[category][index][0])
 
     # np.save('./data/word_tf_idf.npy', word_tf_idf)
     f = open('./data/word_tf_idf.txt', 'w')
@@ -193,7 +260,7 @@ def feature_select(library):
     f.close()
     # 对字典按值由大到小排序
     # dict_feature_select = sorted(word_tf_idf.items(), key=operator.itemgetter(1), reverse=True)
-    return word_tf_idf
+    return word_idf
 
 def preprocess_features():
     library = load_data_set(baseTrainFilePath, categories)  # 加载数据
@@ -211,8 +278,14 @@ def load_processed_data():
     f = open('./data/all_words.txt', 'r')
     temp = f.read()
     saved_all_words = eval(temp)
+    f = open('./data/sample_train.txt', 'r')
+    temp = f.read()
+    saved_sample_train = eval(temp)
+    f = open('./data/words_needed.txt', 'r')
+    temp = f.read()
+    saved_words_needed = eval(temp)
     f.close()
-    return saved_word_tf_idf, saved_word_idf, saved_all_words
+    return saved_word_tf_idf, saved_word_idf, saved_all_words, saved_sample_train, saved_words_needed
 
 def get_essay_tf(essay, word_idf):
     essay_word_frequency = defaultdict(int)
@@ -220,8 +293,9 @@ def get_essay_tf(essay, word_idf):
     essay_vec = []
     total_words_num = len(essay)
     for word in essay:
-        essay_word_frequency[word] = essay_word_frequency + 1
-    for word in essay_word_frequency:
+        essay_word_frequency[word] = essay_word_frequency[word] + 1
+    essay_word_frequency_bak = essay_word_frequency.copy()
+    for word in essay_word_frequency_bak:
         if word in excludes:
             essay_word_frequency.pop(word)
     for word in essay_word_frequency:
@@ -233,20 +307,97 @@ def get_essay_tf(essay, word_idf):
             essay_vec.append(0)
     return essay_vec
 
-if __name__ == '__main__':
-    hidden_layer_num = 5000
-    layer_weight = [0.3 for _ in range(len(saved_all_words) * hidden_layer_num)]
-    bias = [0.3 for _ in range(hidden_layer_num * len(categories))]
-    saved_word_tf_idf, saved_word_idf, saved_all_words = load_processed_data()
-    nn = NeuralNetwork.NeuralNetwork(len(saved_all_words), hidden_layer_num, len(categories), layer_weight, bias,
-                                     layer_weight, bias)
-    output_vec = GetOutput.get_output()
-    library = load_data_set(baseTrainFilePath, categories)
-    # tesget_essay_tf(library['sci.med'][1])
+def shuffle_essays(library):
+    essay_list_random = []
     for category in library:
-        for essay_index in range(len(library[category]) * 0.7):
-            nn.train(get_essay_tf(library[category][essay_index]), saved_word_idf, output_vec[category])
+        for essay in library[category]:
+            essay_list_random.append({category: essay})
+    print(essay_list_random)
+    random.shuffle(essay_list_random)
+    print(essay_list_random)
 
+    f = open('./data/sample_train.txt', 'w')
+    f.write(str(essay_list_random))
+
+def test_read():
+    saved_word_tf_idf, saved_word_idf, saved_all_words, saved_sample_train, saved_words_needed = load_processed_data()
+
+
+def bp():
+    saved_word_tf_idf, saved_word_idf, saved_all_words, saved_sample_train, saved_words_needed = load_processed_data()
+    # 使用时转为np.array
+    # output_sample = GetOutput.get_output()
+    # library = load_data_set(baseTrainFilePath, categories)
+    input_vec = []
+    output_vec = []
+    for index in range(len(saved_sample_train)):
+        input_vec.append(get_essay_tf(list(saved_sample_train[index].values())[0], saved_words_needed))
+        output_vec.append(output_sample[list(saved_sample_train[index].keys())[0]])
+    data = np.array(input_vec)
+    labels = np.array(output_vec)
+
+    s_line = int(0.7 * len(labels))
+    valid_X = data[s_line:]
+    valid_y = labels[s_line:]
+
+    train_X = data[:s_line]
+    train_y = labels[:s_line]
+
+    W1 = np.random.randn(len(saved_words_needed), 5000) / math.sqrt(len(saved_words_needed))
+    b1 = np.zeros(5000)
+    W2 = np.random.randn(5000, 500) / math.sqrt(5000)
+    b2 = np.zeros(500)
+    W3 = np.random.randn(500, len(output_sample)) / math.sqrt(500)
+    b3 = np.zeros(len(output_sample))
+    lr = 0.05
+    regu_rate = 0.001
+    max_iter = 10
+
+    fc1 = FC(W1, b1, lr, regu_rate)
+    relu1 = Relu()
+    fc2 = FC(W2, b2, lr, regu_rate)
+    relu2 = Relu()
+    fc3 = FC(W3, b3, lr, regu_rate)
+    cross_entropy = SparseSoftmaxCrossEntropy()
+
+    for i in range(max_iter):
+        h1 = fc1.forward(train_X)
+        h2 = relu1.forward(h1)
+        h3 = fc2.forward(h2)
+        h4 = relu2.forward(h3)
+        h5 = fc3.forward(h4)
+        loss = cross_entropy.forward(h5, train_y)
+
+        print("iter: {}, loss：{}".format(i + 1, loss))
+
+        grad_h5 = cross_entropy.backprop()
+        grad_h4 = fc3.backprop(grad_h5)
+        grad_h3 = relu2.backprop(grad_h4)
+        grad_h2 = fc2.backprop(grad_h3)
+        grad_h1 = relu1.backprop(grad_h2)
+        grad_X = fc1.backprop(grad_h1)
+
+        fc2.update()
+        fc1.update()
+
+    valid_h1 = fc1.forward(valid_X)
+    valid_h2 = relu1.forward(valid_h1)
+    valid_h3 = fc2.forward(valid_h2)
+    valid_h4 = relu1.forward(valid_h3)
+    valid_h5 = fc3.forward(valid_h4)
+    valid_predict = np.argmax(valid_h5, 1)
+
+    valid_acc = np.mean(valid_predict == valid_y)
+
+    print('acc: ', valid_acc)
+
+
+if __name__ == '__main__':
+    # saved_word_tf_idf, saved_word_idf, saved_all_words, saved_sample_train = load_processed_data()
+    # get_words_needed()
+    bp()
+    # test_read()
+    # preprocess_features()
     # tf_example
     # tfidf2 = TfidfVectorizer()
     # print(list2string(wordsList))

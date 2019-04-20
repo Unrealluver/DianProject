@@ -36,4 +36,4 @@ def get_output():
         position = position + 1
 
     print(categories_output)
-    return b
+    return categories_output
