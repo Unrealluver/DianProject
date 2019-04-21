@@ -351,7 +351,7 @@ def bp():
     b3 = np.zeros(len(output_sample))
     lr = 0.05
     regu_rate = 0.001
-    max_iter = 10
+    max_iter = 50000
 
     fc1 = FC(W1, b1, lr, regu_rate)
     relu1 = Relu()
