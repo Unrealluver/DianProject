@@ -6,9 +6,7 @@ import os
 import copy
 from NeuralNetwork import *
 import numpy as np
-import GetOutput
 import random
-from sklearn.feature_extraction.text import TfidfVectorizer
 
 baseTrainFilePath = '/media/patrick/Softwares/PyProject/DianProject/source/20newsbydate/20news-bydate-train/'
 
@@ -106,16 +104,11 @@ def load_data_set(baseFilePath, categories):
         fileNames = os.listdir(baseFilePath + category)
         wordsList = []
         for fileName in fileNames:
-            # print(filesPath + fileName)
             txt = open(baseFilePath + category + '/' + fileName, 'r', errors='replace').read()
             letterVec = file_basic_process(txt)
             words = letterVec.split()
-            # print(words)
             wordsList.append(words)
         library[category] = wordsList
-
-    # print(wordslist)
-    # classVec = [0, 1, 0, 1, 0, 1]  # 类别标签向量，1代表好，0代表不好
     return library
 
 
@@ -169,6 +162,7 @@ def feature_select(library):
         for key in doc_frequency_bak.get(category).keys():
             if key in excludes:
                 doc_frequency[category].pop(key)
+    print("excluded words in the doc_frequency have been drop!")
 
     # 手动去除数字
     doc_frequency_bak = copy.deepcopy(doc_frequency)
@@ -176,6 +170,7 @@ def feature_select(library):
         for key in doc_frequency_bak.get(category).keys():
             if str.isdigit(key):
                 doc_frequency[category].pop(key)
+    print("nums in the doc_frequency have been drop!")
 
     # 计算每个词的TF值
     # word_tf{dict:category} contains word_tf_category{dict:word} contains num _int
@@ -202,15 +197,13 @@ def feature_select(library):
         all_words.update(doc_frequency[category])
     print("all_words has been gotten, its len is: " + str(len(all_words)))
 
-    np.save('./data/all_words.npy', all_words)
-
     # essay_list转set
     essay_set_lists = []
     for category in library:
         for essay in library[category]:
             essay_set_lists.append(set(essay))
     flag = 0
-    # warning : its too slow!!!!!!!
+    # warning : list is too slow!!!!!!!
     for word in all_words:
         for essay in essay_set_lists:
             if word in essay:
@@ -219,9 +212,6 @@ def feature_select(library):
         flag = flag + 1
         if flag % 1000 == 0:
             print(str(flag) + " words has been solved.")
-            # print("essay has been done, word_doc: " + str(word_doc[word]))
-        # print("word: " + word + " has been gotten. " + " num: " + str(word_doc[word]))
-
 
     for category in doc_frequency:
         for word in doc_frequency[category]:
@@ -242,15 +232,8 @@ def feature_select(library):
     f.write(str(word_idf))
 
     get_words_needed()
-    # for category in doc_frequency:
-    #     for index in range(len(word_tf_idf[category])):
-    #         if word_tf_idf[category][index][1] < 0.0001:
-    #             if word_tf_idf[category][index][0] in word_idf:
-    #                 if word_tf_idf[category][index][0] == 'god':
-    #                     print('remove: ' + word_tf_idf[category][index][0] + 'tfidf: ' + str(word_tf_idf[category][index][1]))
-    #                 word_idf.pop(word_tf_idf[category][index][0])
+    print("word_needed has been gotten!")
 
-    # np.save('./data/word_tf_idf.npy', word_tf_idf)
     f = open('./data/word_tf_idf.txt', 'w')
     f.write(str(word_tf_idf))
     f = open('./data/word_idf.txt', 'w')
@@ -258,12 +241,11 @@ def feature_select(library):
     f = open('./data/all_words.txt', 'w')
     f.write(str(all_words))
     f.close()
-    # 对字典按值由大到小排序
-    # dict_feature_select = sorted(word_tf_idf.items(), key=operator.itemgetter(1), reverse=True)
     return word_idf
 
 def preprocess_features():
     library = load_data_set(baseTrainFilePath, categories)  # 加载数据
+    shuffle_essays(library)
     features = feature_select(library)  # 所有词的TF-IDF值
     print(features)
     print(len(features))
@@ -285,6 +267,7 @@ def load_processed_data():
     temp = f.read()
     saved_words_needed = eval(temp)
     f.close()
+    print("data has been loaded!")
     return saved_word_tf_idf, saved_word_idf, saved_all_words, saved_sample_train, saved_words_needed
 
 def get_essay_tf(essay, word_idf):
@@ -315,19 +298,12 @@ def shuffle_essays(library):
     print(essay_list_random)
     random.shuffle(essay_list_random)
     print(essay_list_random)
-
     f = open('./data/sample_train.txt', 'w')
     f.write(str(essay_list_random))
-
-def test_read():
-    saved_word_tf_idf, saved_word_idf, saved_all_words, saved_sample_train, saved_words_needed = load_processed_data()
-
+    print("essays have been shuffled!")
 
 def bp():
     saved_word_tf_idf, saved_word_idf, saved_all_words, saved_sample_train, saved_words_needed = load_processed_data()
-    # 使用时转为np.array
-    # output_sample = GetOutput.get_output()
-    # library = load_data_set(baseTrainFilePath, categories)
     input_vec = []
     output_vec = []
     for index in range(len(saved_sample_train)):
@@ -388,23 +364,9 @@ def bp():
     valid_predict = np.argmax(valid_h5, 1)
 
     valid_acc = np.mean(valid_predict == valid_y)
-
     print('acc: ', valid_acc)
 
 
 if __name__ == '__main__':
-    # saved_word_tf_idf, saved_word_idf, saved_all_words, saved_sample_train = load_processed_data()
-    # get_words_needed()
     bp()
-    # test_read()
-    # preprocess_features()
-    # tf_example
-    # tfidf2 = TfidfVectorizer()
-    # print(list2string(wordsList))
-    # re = tfidf2.fit_transform(list2string(wordsList))
-
-
-
-    # saved_word_tf_idf = np.load('./data/word_tf_idf.npy')
-    print("word_tf_idf has been read! type of word_tf_idf is " + str(type(saved_word_tf_idf)))
 
