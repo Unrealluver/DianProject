@@ -296,6 +296,7 @@ def shuffle_essays(library):
         for essay in library[category]:
             essay_list_random.append({category: essay})
     print(essay_list_random)
+    # o(n) shuffle
     random.shuffle(essay_list_random)
     print(essay_list_random)
     f = open('./data/sample_train.txt', 'w')
@@ -327,7 +328,7 @@ def bp():
     b3 = np.zeros(len(output_sample))
     lr = 0.05
     regu_rate = 0.001
-    max_iter = 50000
+    max_iter = 500
 
     fc1 = FC(W1, b1, lr, regu_rate)
     relu1 = Relu()
@@ -353,6 +354,7 @@ def bp():
         grad_h1 = relu1.backprop(grad_h2)
         grad_X = fc1.backprop(grad_h1)
 
+        fc3.update()
         fc2.update()
         fc1.update()
 
